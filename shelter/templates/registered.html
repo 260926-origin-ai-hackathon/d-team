@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}{{ t('registered') }} | {{ profile.name }}{% endblock %}
+{% block body %}
+<div class="donecard">
+  <div class="done-check">✅</div>
+  <h1 class="done-title">{{ t('registered') }}</h1>
+  <div class="muted">{{ t('receipt_no') }}</div>
+  <div class="bigno huge">{{ me.id }}</div>
+  <div class="myname">{{ me.name }}<span class="muted"> · {{ me.hh }} {{ t('people') }}</span></div>
+  {% if me.members %}<div class="muted small">{% for m in me.members %}{{ m.name }}{% if m.age is not none %}（{{ m.age }}）{% endif %}{{ '・' if not loop.last }}{% endfor %}</div>{% endif %}
+  <img class="barcode" src="/me/barcode.svg" alt="{{ t('receipt_no') }} {{ barcode_text(me.id) }}">
+  <div class="barno">{{ barcode_text(me.id) }}</div>
+  <p class="done-hint">{{ t('done_hint') }}</p>
+  <a class="bigbtn primary next" href="/">{{ t('next') }} →</a>
+</div>
+{% endblock %}

@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="{{ lang }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}{{ profile.name }}{% endblock %}</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="wrap">
+    <a class="title" href="/">{{ profile.name }}</a>
+    <a class="langbtn" href="{{ path }}?lang={{ 'en' if lang == 'ja' else 'ja' }}">{{ t('switch') }}</a>
+  </div>
+</header>
+<main class="wrap">
+{% block body %}{% endblock %}
+</main>
+{% block scripts %}{% endblock %}
+</body>
+</html>

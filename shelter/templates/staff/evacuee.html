@@ -1,0 +1,133 @@
+{% extends "staff/_base.html" %}
+{% from "staff/_evacuee_form.html" import evacuee_fields %}
+{% block title %}受付 {{ ev.id }}{% endblock %}
+{% block body %}
+<p><a href="/staff/roster">← 名簿</a> · <a href="/staff/checkin">受付</a></p>
+<h1>受付番号 {{ ev.id }} <span class="muted">{{ ev.name }}</span>
+  {% if ev.source == 'app' %}<span class="chip">スマホから登録</span>{% endif %}
+  {% if not ev.active %}<span class="chip">退所 {{ ev.checked_out_at[5:16] | replace('T', ' ') }}</span>{% endif %}</h1>
+{% if error %}<div class="banner warn">{{ error }}</div>{% endif %}
+{% if saved %}<div class="banner">保存しました</div>{% endif %}
+
+{% if ev.needs or ev.note or ev.care %}
+<section class="card needs-card">
+  <h2>本人が運営に伝えたいこと</h2>
+  <div>{% for n in ev.needs %}<span class="tag need big">{{ NEEDS[n] }}</span>{% endfor %}
+       {% for c in ev.care %}<span class="tag care big">{{ CARE[c] }}</span>{% endfor %}
+       {% for a in ev.alg %}<span class="tag big">{{ ALLERGY[a] }}</span>{% endfor %}</div>
+  {% if ev.note %}<p class="note">「{{ ev.note }}」</p>{% endif %}
+</section>
+{% endif %}
+
+{% if ev.members %}
+<section class="card">
+  <h2>同行者（家族） <span class="muted small">{{ ev.members | length }} 人登録・合計 {{ ev.hh }} 人</span></h2>
+  <div class="table-wrap"><table>
+    <tr><th>名前</th><th>続柄</th><th>性別・年齢</th><th>要配慮・アレルギー</th></tr>
+    {% for m in ev.members %}
+    <tr><td>{{ m.name }}{% if m.kana %}<div class="muted small">{{ m.kana }}</div>{% endif %}</td>
+      <td>{{ REL.get(m.rel, '') or '—' }}</td>
+      <td>{{ SEX.get(m.sex, '') }}・{{ m.age if m.age is not none else '—' }}</td>
+      <td>{% for c in m.care %}<span class="tag care">{{ CARE[c] }}</span>{% endfor %}{% for a in m.alg %}<span class="tag">{{ ALLERGY[a] }}</span>{% endfor %}</td></tr>
+    {% endfor %}
+  </table></div>
+</section>
+{% endif %}
+
+<div class="cols c-3-2">
+  <div>
+    <section class="card" id="contact">
+      <h2>対面対応のメモ <span class="muted small">この人に対応したことを時刻付きで残す</span></h2>
+      <div class="presets">{% for p in ["保健師に引き継ぎ", "薬の名前と残りを確認", "福祉スペースへ案内", "本部へ物資要請", "様子見"] %}
+        <button type="button" class="btn secondary small" onclick="var i=document.getElementById('contact-note'); i.value=i.value?i.value+'。{{ p }}':'{{ p }}'; i.focus();">{{ p }}</button>{% endfor %}</div>
+      <form method="post" action="/staff/roster/{{ ev.id }}/contact" class="row">
+        <div style="flex:4"><input id="contact-note" name="note" maxlength="500" required placeholder="例: 保健師に引き継ぎ。14時に再確認" autofocus></div>
+        <div style="flex:0 0 auto"><button name="close" value="1" title="未対応の相談・伝言もまとめて済みにする">記録して済みにする</button>
+          <button name="close" value="0" class="secondary" title="相談・伝言は開いたまま">記録だけ</button></div>
+      </form>
+      {% if contacts %}
+      <table class="contacts">
+        {% for c in contacts %}
+        <tr><td class="muted small nowrap">{{ c.created_at[5:16] | replace('T', ' ') }}</td><td>{{ c.note }}</td></tr>
+        {% endfor %}
+      </table>
+      {% else %}<p class="muted small">まだ対応の記録はありません</p>{% endif %}
+    </section>
+
+    <section class="card" id="told">
+      <h2>この人の伝言（避難所に伝える） <span class="muted small">{{ told | length }} 件</span></h2>
+      {% if told %}
+      <table class="voice-table">
+        <tr><th>時刻</th><th>用件</th><th>本文</th><th>状態</th></tr>
+        {% for k in told %}
+        <tr class="{{ 'done' if k.status == 'done' }}">
+          <td class="muted small nowrap">{{ k.created_at[5:16] | replace('T', ' ') }}</td>
+          <td><span class="tag lv-{{ k.level }}">{{ CASE_CATS.get(k.category, k.category) }}</span>{% if k.urgent %} <span class="chip lv-3">急ぐ</span>{% endif %}</td>
+          <td class="voice-text">{{ k.text or '（本文なし）' }}</td>
+          <td class="nowrap"><div class="small">{{ CASE_STATUSES.get(k.status, k.status) }}</div>
+            {% for st, lb in [('in_progress', '対応中'), ('hold', '保留'), ('done', '済み')] %}{% if st != k.status %}<form class="inline" method="post" action="/staff/cases/{{ k.id }}/status">
+            <input type="hidden" name="status" value="{{ st }}"><input type="hidden" name="back" value="/staff/roster/{{ ev.id }}#told">
+            <button class="btn small {{ 'secondary' if st != 'done' }}">{{ lb }}</button></form>{% endif %}{% endfor %}</td>
+        </tr>
+        {% endfor %}
+      </table>
+      {% else %}<p class="muted small">この人からの伝言はまだありません</p>{% endif %}
+    </section>
+
+    <section class="card" id="chats">
+      <h2>この人の相談（スマホのチャット） <span class="muted small">{{ chats | length }} 件</span></h2>
+      {% if chats %}
+      <table class="voice-table">
+        <tr><th>時刻</th><th>種類</th><th>発言と AI の答え</th><th>対応</th></tr>
+        {% for r in chats %}
+        <tr class="{{ 'done' if r.status == 'done' }}">
+          <td class="muted small nowrap">{{ r.created_at[5:16] | replace('T', ' ') }}</td>
+          <td><span class="chip k-{{ r.kind }}">{{ KINDS.get(r.kind, 'その他') }}</span><div class="muted small">{{ TOPIC_LABEL.get(r.topic, '') }}</div></td>
+          <td class="voice-text"><strong>{{ r.content }}</strong>{% if r.answer %}<div class="muted small ans">→ {{ r.answer[:160] }}{% if r.answer | length > 160 %}…{% endif %}</div>{% endif %}</td>
+          <td>{% if r.kind in ('request', 'trouble', 'emergency') %}
+            <form method="post" action="/staff/voices/{{ r.id }}/status">
+              <input type="hidden" name="back" value="/staff/roster/{{ ev.id }}#chats">
+              {% if r.status == 'done' %}<input type="hidden" name="status" value="open"><button class="secondary small">未対応に戻す</button>
+              {% else %}<input type="hidden" name="status" value="done"><button class="small">対応済み</button>{% endif %}
+            </form>{% else %}<span class="muted small">—</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </table>
+      {% else %}<p class="muted small">この人のスマホからの相談はまだありません{% if ev.source != 'app' %}（手入力で受付した人は、本人のスマホから「受付をする」で登録し直すとひも付きます）{% endif %}</p>{% endif %}
+    </section>
+
+    <details class="card">
+      <summary><strong>登録内容を直す</strong>（本人の申し出・運営メモ）</summary>
+      <form method="post" action="/staff/roster/{{ ev.id }}">
+        {{ evacuee_fields(ev) }}
+        <p><button>保存</button></p>
+      </form>
+    </details>
+  </div>
+
+  <div>
+    <div class="card" style="text-align:center">
+      <div class="muted small">受付番号のバーコード（本人のスマホと同じもの）</div>
+      <img class="barcode" src="/staff/roster/{{ ev.id }}/barcode.svg" alt="{{ barcode_text }}">
+      <div class="barno">{{ barcode_text }}</div>
+    </div>
+    <div class="card">
+      <table>
+        <tr><th>住所</th><td>{{ ev.addr or '—' }}</td></tr>
+        <tr><th>性別・年齢</th><td>{{ SEX.get(ev.sex, '') }}・{{ ev.age if ev.age is not none else '—' }}</td></tr>
+        <tr><th>人数</th><td>{{ ev.hh }} 人{% if ev.pet %}・ペット {{ ev.pet }}{% endif %}</td></tr>
+        <tr><th>言語</th><td>{{ LANGS.get(ev.lang, ev.lang) }}</td></tr>
+        <tr><th>入所</th><td>{{ ev.checked_in_at | replace('T', ' ') }}</td></tr>
+        <tr><th>退所</th><td>{{ (ev.checked_out_at or '—') | replace('T', ' ') }}</td></tr>
+        <tr><th>受付方法</th><td>{{ SOURCE.get(ev.source, ev.source) }}</td></tr>
+        <tr><th>運営メモ</th><td>{{ ev.staff_note or '—' }}</td></tr>
+        <tr><th>端末ID</th><td><code>{{ ev.dev or '—' }}</code></td></tr>
+      </table>
+    </div>
+    {% if ev.active %}
+    <form method="post" action="/staff/roster/{{ ev.id }}/checkout" onsubmit="return confirm('退所にしますか？')">
+      <button class="danger">退所にする</button></form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

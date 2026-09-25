@@ -1,0 +1,128 @@
+{% extends "staff/_base.html" %}
+{% block title %}AI助手{% endblock %}
+{% block body %}
+<div class="page-head">
+  <h1>運営者の AI 助手</h1>
+  {% if gemini.available %}
+  <label class="switch{{ ' disabled' if tab == 'care' }}" title="{{ gemini.model }}">
+    <input type="checkbox" id="ai-switch" aria-label="クラウド AI (Gemini)"{{ ' disabled' if tab == 'care' }}>
+    <span class="opt l">この PC の AI</span><span class="track"></span><span class="opt r">クラウド AI (Gemini)</span>
+  </label>
+  {% endif %}
+</div>
+<p class="muted">AI の出力は下書きです。判断は運営者がしてください。<span id="ai-note">すべて PC の中で動きます（外部に送りません）。</span></p>
+{% if gemini.available and tab == "care" %}<div class="banner">名簿の個人情報は PC の外に出さないため、このタスクは常に PC 内で処理します（スイッチは無効）。</div>{% endif %}
+{% set tabs = [("manual", "① マニュアルに聞く"), ("care", "② 要配慮者の洗い出し"), ("supplies", "③ 不足物資の見積もり"),
+               ("poster", "④ 掲示文を作る"), ("handover", "⑤ 引継ぎ要約")] %}
+<nav class="tabs">{% for k, v in tabs %}<a href="?tab={{ k }}" class="{{ 'on' if tab == k }}">{{ v }}</a>{% endfor %}</nav>
+
+{% if tab == "manual" %}
+<section class="card">
+  <p class="muted">運営マニュアル（大阪市・内閣府のガイドライン、トイレ・ペット・救命・障害児者への配慮など）から関係する箇所を探して答えます。
+    {{ manual.chunks }} チャンク取り込み済み{% if manual.running %}（取り込み中 {{ manual.done }}/{{ manual.total }}）{% endif %}。</p>
+  {% if manual.chunks == 0 %}<div class="banner warn">マニュアルが未取り込みです。<a href="/staff/settings#manual">設定</a> から取り込んでください。</div>{% endif %}
+  <form id="ai-form" data-task="manual">
+    <label>質問</label>
+    <textarea name="question" rows="2" placeholder="例: 要介護の方の夜間の対応は？"></textarea>
+    <div class="suggest">
+      {% for q in ["要介護の方の夜間の対応は？", "断水時のトイレはどう運用する？", "ペットを連れてきた人への対応は？",
+                   "女性や子どもの安全のために何をすべき？", "避難所で心肺停止の人が出たら？", "食物アレルギーの人への配慮は？"] %}
+      <button type="button" data-fill="{{ q }}">{{ q }}</button>{% endfor %}
+    </div>
+    <p><button>聞く</button></p>
+  </form>
+</section>
+{% elif tab == "care" %}
+<section class="card">
+  <p class="muted">名簿から要配慮の申し出がある人と 75 歳以上の人を、登録した同行者も含めて抽出しています（{{ care_rows | length }} 件の受付）。</p>
+  <div class="table-wrap"><table>
+    <tr><th>番号</th><th>氏名</th><th>年齢</th><th>人数</th><th>区分</th><th>メモ</th></tr>
+    {% for r in care_rows %}
+    <tr><td><a href="/staff/roster/{{ r.id }}">{{ r.id }}</a></td><td>{{ r.name }}</td><td>{{ r.age if r.age is not none else '—' }}</td><td>{{ r.hh }}</td>
+      <td>{% for c in r.care %}<span class="tag care">{{ CARE[c] }}</span>{% endfor %}{% for a in r.alg %}<span class="tag">{{ ALLERGY[a] }}</span>{% endfor %}
+        {% for m in r.members if m.care or m.alg or (m.age or 0) >= 75 %}<div class="small">同行 {{ m.name }}（{{ m.age if m.age is not none else '年齢不明' }}）: {% for c in m.care %}<span class="tag care">{{ CARE[c] }}</span>{% endfor %}{% for a in m.alg %}<span class="tag">{{ ALLERGY[a] }}</span>{% endfor %}</div>{% endfor %}</td>
+      <td>{{ r.note or '' }}</td></tr>
+    {% else %}<tr><td colspan="6" class="muted">該当なし</td></tr>{% endfor %}
+  </table></div>
+  <form id="ai-form" data-task="care"><p><button>AI に声かけの優先順を要約してもらう</button></p></form>
+</section>
+{% elif tab == "supplies" %}
+<section class="card">
+  <p class="muted">在所 {{ s.total }} 人（乳幼児 {{ s.infants }}・女性 {{ s.female }}・要介護 {{ s.care.NUR }}・アレルギー {{ s.care.ALG }}）をもとにしたルール計算（1日分）。</p>
+  <table>
+    <tr><th>品目</th><th>必要</th><th>根拠</th><th>備蓄</th><th>不足</th></tr>
+    {% for x in supplies %}<tr><td>{{ x.item }}</td><td>{{ x.need }} {{ x.unit }}</td><td class="muted">{{ x.basis }}</td>
+      <td>{{ x.stock if x.stock is not none else '—' }}</td><td class="{{ 'bad' if x.short }}">{{ x.short if x.short is not none else '—' }}</td></tr>{% endfor %}
+  </table>
+  <p class="muted small">備蓄量は <a href="/staff/settings#stock">設定</a> で入力すると不足が出ます。</p>
+  <form id="ai-form" data-task="supplies"><p><button>AI に補足コメントをもらう</button></p></form>
+</section>
+{% elif tab == "poster" %}
+<section class="card">
+  <form id="ai-form" data-task="poster">
+    <label>決定事項（箇条書きでよい）</label>
+    <textarea name="text" rows="4" placeholder="例: 明日から朝食は7:30、体育館前。アレルギー対応食は受付で名前を言って受け取る。"></textarea>
+    <p><button>掲示文・放送原稿・やさしい日本語・英語を作る</button></p>
+  </form>
+</section>
+{% elif tab == "handover" %}
+<section class="card">
+  <p class="muted">在所状況・お知らせ・避難者チャットの相談傾向（匿名・件数のみ）から引継ぎメモを作ります。</p>
+  <form id="ai-form" data-task="handover">
+    <label>運営者メモ（任意）</label>
+    <textarea name="text" rows="2" placeholder="例: 夜間に発熱者1名。明朝、保健師に報告。"></textarea>
+    <p><button>引継ぎメモを作る</button></p>
+  </form>
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>AI の出力 <span class="muted small" id="ai-status"></span></h2>
+  <div class="ai-out" id="ai-out"><span class="muted">ここに出ます</span></div>
+  <div id="ai-src" class="sources"></div>
+  <p class="noprint"><button type="button" class="secondary" id="copy">コピー</button></p>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+const form = document.getElementById("ai-form");
+const out = document.getElementById("ai-out");
+const st = document.getElementById("ai-status");
+const srcBox = document.getElementById("ai-src");
+const note = document.getElementById("ai-note");
+const NOTE = {
+  local: "すべて PC の中で動きます（外部に送りません）。",
+  gemini: "クラウド AI（Gemini）を使います。質問文とマニュアル抜粋（集計・お知らせを含む）が Google に送られます。名簿は送りません。",
+};
+const aiBackend = bindAiSwitch(document.getElementById("ai-switch"), (mode) => { note.textContent = NOTE[mode]; });
+document.querySelectorAll("[data-fill]").forEach((b) => b.addEventListener("click", () => {
+  form.querySelector("textarea").value = b.dataset.fill;
+}));
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const btn = form.querySelector("button:not([type=button])");
+  btn.disabled = true;
+  const body = Object.fromEntries(new FormData(form).entries());
+  body.backend = aiBackend();
+  out.textContent = ""; srcBox.innerHTML = ""; st.textContent = "考えています…";
+  const t0 = performance.now();
+  let text = "";
+  await streamPost("/staff/api/ai/" + form.dataset.task, body, {
+    queue(n) { st.textContent = n > 0 ? "順番待ち（前に " + n + " 件）" : "考えています…"; },
+    delta(s) { text += s; out.innerHTML = renderAnswer(text); st.textContent = "生成中…"; },
+    error(m) { st.textContent = ""; out.innerHTML = '<span class="bad">' + escapeHtml(m) + "</span>"; },
+    done(ev) {
+      st.textContent = "完了（" + ((performance.now() - t0) / 1000).toFixed(1) + " 秒）" + (ev.backend === "gemini" ? "（Gemini）" : "");
+      const m = (ev.sources || []).filter((s) => s.type === "manual");
+      if (m.length) {
+        srcBox.innerHTML = "<h3>検索したマニュアルの箇所</h3><ol>" + m.map((s) =>
+          "<li><strong>" + escapeHtml(s.title) + " › " + escapeHtml(s.section) + "</strong>（類似度 " + s.score +
+          '）<br><span class="small">' + escapeHtml(s.text) + "…</span></li>").join("") + "</ol>";
+      }
+    },
+  });
+  btn.disabled = false;
+});
+document.getElementById("copy").onclick = () => navigator.clipboard && navigator.clipboard.writeText(out.textContent);
+</script>
+{% endblock %}

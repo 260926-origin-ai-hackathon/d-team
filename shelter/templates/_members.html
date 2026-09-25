@@ -1,0 +1,46 @@
+{# 同行者（家族）の入力欄。自己登録（避難者のスマホ・日英）と運営の手入力・編集で共通。
+   members: 既存の同行者（checkin.to_view の members）。en: 英語で出す。big: スマホ向けの大きい表示。
+   hh_input: 人数の入力欄（運営フォームだけ）。追加・削除に合わせて人数を直す。
+   各欄の name は m{番号}_name など（main._form_members が読む）。番号は追加・削除で飛んでよい #}
+{% macro member_block(i, m=None, en=False, big=False) %}
+{% set L = CARE_EN if en else CARE %}{% set S = SEX_EN if en else SEX %}{% set R = REL_EN if en else REL %}
+<div class="member" data-member>
+  <div class="member-head">
+    <strong>{{ 'Person with you' if en else '同行者' }} <span data-no></span></strong>
+    <button type="button" class="secondary small" data-remove>{{ 'Remove' if en else 'この人を消す' }}</button>
+  </div>
+  <div class="row">
+    <div><label>{{ 'Name' if en else '名前' }} <span class="req">*</span></label>
+      <input name="m{{ i }}_name" required maxlength="60" value="{{ m.name if m else '' }}"></div>
+    {% if not en %}<div><label>ふりがな</label><input name="m{{ i }}_kana" maxlength="60" value="{{ m.kana or '' if m else '' }}"></div>{% endif %}
+  </div>
+  <div class="row">
+    <div><label>{{ 'Relationship' if en else '続柄' }}</label>
+      <select name="m{{ i }}_rel"><option value="">—</option>
+        {% for k, v in R.items() %}<option value="{{ k }}" {{ 'selected' if m and m.rel == k }}>{{ v }}</option>{% endfor %}</select></div>
+    <div><label>{{ 'Sex' if en else '性別' }}</label>
+      <select name="m{{ i }}_sex">{% for k, v in S.items() %}<option value="{{ k }}" {{ 'selected' if (m and m.sex == k) or (not m and k == 'X') }}>{{ v }}</option>{% endfor %}</select></div>
+    <div><label>{{ 'Age' if en else '年齢' }}</label>
+      <input name="m{{ i }}_age" type="number" inputmode="numeric" min="0" max="120" value="{{ m.age if m and m.age is not none else '' }}"></div>
+  </div>
+  <details {{ 'open' if m and (m.care or m.alg) }}>
+    <summary>{{ 'Which apply / allergies (if any)' if en else 'あてはまるもの・アレルギー（あれば）' }}</summary>
+    <div class="checks {{ 'big' if big }}">{% for k, v in L.items() %}
+      <label><input type="checkbox" name="m{{ i }}_care" value="{{ k }}" {{ 'checked' if m and k in m.care }}> {{ v }}</label>{% endfor %}</div>
+    <div class="checks {{ 'big' if big }}" style="margin-top:6px">{% for k, v in ALLERGY.items() %}
+      <label><input type="checkbox" name="m{{ i }}_alg" value="{{ k }}" {{ 'checked' if m and k in m.alg }}> {{ v }}</label>{% endfor %}</div>
+  </details>
+</div>
+{% endmacro %}
+
+{% macro members_editor(members=[], en=False, big=False, hh_input=False) %}
+<div class="members" data-members data-next="{{ members | length }}"{% if hh_input %} data-hh="hh"{% endif %}
+     data-total-fmt="{{ 'Total: {n} (including you)' if en else '合計 {n} 人（本人を含む）' }}">
+  <div class="members-list">
+    {% for m in members %}{{ member_block(loop.index0, m, en, big) }}{% endfor %}
+  </div>
+  <template>{{ member_block('__i__', None, en, big) }}</template>
+  <p class="members-foot"><button type="button" class="secondary" data-add>{{ '+ Add a person' if en else '＋ 同行者を追加' }}</button>
+    <span class="muted" data-total></span></p>
+</div>
+{% endmacro %}

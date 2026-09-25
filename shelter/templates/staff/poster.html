@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>入口ポスター | {{ profile.name }}</title>
+<link rel="stylesheet" href="/static/app.css">
+<style>
+  body { background: #fff; font-size: 20px; }
+  .poster { max-width: 190mm; margin: 0 auto; padding: 10mm 0; text-align: center; }
+  .poster h1 { font-size: 2.2rem; margin: 0 0 4px; }
+  .poster .en { color: #555; font-size: 1.1rem; }
+  .qrs { display: flex; justify-content: center; gap: 12mm; margin: 10mm 0 6mm; }
+  .qrs img { width: 70mm; height: 70mm; image-rendering: pixelated; }
+  .step { font-size: 1.4rem; font-weight: 700; }
+  .box { border: 2px solid #222; border-radius: 12px; padding: 4mm 6mm; text-align: left; margin: 4mm 0; font-size: 1rem; }
+  code { font-size: 1.3rem; }
+</style>
+</head>
+<body>
+<div class="poster">
+  <h1>{{ profile.name }}　情報ページ</h1>
+  <div class="en">Evacuation shelter information page (Japanese / English)</div>
+  <div class="qrs">
+    <div><img src="/staff/wifi-qr.png" alt=""><div class="step">① Wi-Fi に入る</div><div class="en">Join Wi-Fi</div></div>
+    <div><img src="/staff/entry-qr.png" alt=""><div class="step">② ページを開く</div><div class="en">Open the page</div></div>
+  </div>
+  <div class="box">
+    <div>Wi-Fi: <strong>{{ profile.ssid }}</strong>{% if profile.wifi_password %}　パスワード / Password: <strong>{{ profile.wifi_password }}</strong>{% endif %}</div>
+    <div>ページ / Page: <code>{{ profile.entry_url }}</code></div>
+  </div>
+  <div class="box">
+    <div>・この Wi-Fi は<strong>インターネットにつながりません</strong>。「接続を維持しますか」と出たら<strong>「このまま接続」</strong>を選んでください。</div>
+    <div>・②の QR が読めないときは、URL をブラウザの<strong>アドレス欄</strong>に入れてください（検索欄に入れると開けません）。</div>
+    <div>・お知らせ・相談（AI）・避難所の案内が見られます。個人情報はこの避難所のPCの外に出ません。</div>
+    <div class="en" style="margin-top:6px">This Wi-Fi has no internet. If your phone asks, choose "Stay connected". Type the URL into the address bar, not the search box.</div>
+  </div>
+  <p class="noprint"><button onclick="window.print()">印刷する</button></p>
+</div>
+</body>
+</html>

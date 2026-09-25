@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}{{ t('chat') }} | {{ profile.name }}{% endblock %}
+{% block body %}
+<div class="page-head">
+  <h1>💬 {{ t('chat') }}</h1>
+  {% if gemini.available %}
+  <label class="switch" title="{{ gemini.model }}">
+    <input type="checkbox" id="ai-switch" aria-label="{{ t('ai_cloud') }}">
+    <span class="opt l">{{ t('ai_local') }}</span><span class="track"></span><span class="opt r">{{ t('ai_cloud') }}</span>
+  </label>
+  {% endif %}
+</div>
+<div class="suggest" id="suggest">
+  {% for s in suggestions %}<button type="button" data-q="{{ s }}">{{ s }}</button>{% endfor %}
+</div>
+<div class="chat-log" id="log"></div>
+<div class="composer">
+  <div class="wrap">
+    <form id="f" autocomplete="off">
+      <input id="q" name="q" placeholder="{{ t('chat_placeholder') }}" maxlength="500" enterkeyhint="send">
+      <button id="send">{{ t('send') }}</button>
+    </form>
+    <div class="disclaimer">⚠️ {{ t('chat_disclaimer') }}
+      · <a href="#" id="reset">{{ t('reset') }}</a> · <a href="/">{{ t('home') }}</a></div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="/static/app.js"></script>
+<script>
+const LANG = {{ lang | tojson }};
+const TXT = {
+  waiting: {{ t('waiting', n='{n}') | tojson }}, thinking: {{ t('thinking') | tojson }},
+  writing: {{ t('writing') | tojson }},
+  error: {{ t('error') | tojson }}, sources: {{ t('sources') | tojson }},
+  noticeAt: {{ t('notice_at', t='{t}') | tojson }},
+};
+const KEY = "shelter_chat_" + LANG;
+const log = document.getElementById("log");
+const input = document.getElementById("q");
+const sendBtn = document.getElementById("send");
+const aiBackend = bindAiSwitch(document.getElementById("ai-switch"));
+let history = [];
+try { history = JSON.parse(sessionStorage.getItem(KEY) || "[]"); } catch (e) { history = []; }
+
+function bubble(role, text) {
+  const d = document.createElement("div");
+  d.className = "msg " + (role === "user" ? "user" : "ai");
+  if (role === "user") d.textContent = text; else d.innerHTML = renderAnswer(text);
+  log.appendChild(d);
+  return d;
+}
+function save() { try { sessionStorage.setItem(KEY, JSON.stringify(history.slice(-12))); } catch (e) {} }
+function scroll() { window.scrollTo(0, document.body.scrollHeight); }
+for (const h of history) bubble(h.role, h.content);
+if (history.length) document.getElementById("suggest").style.display = "none";
+
+async function ask(text) {
+  text = text.trim();
+  if (!text) return;
+  document.getElementById("suggest").style.display = "none";
+  bubble("user", text);
+  const ai = bubble("ai", "");
+  const body = document.createElement("span");
+  const status = document.createElement("div");
+  status.className = "status";
+  status.textContent = TXT.thinking;
+  ai.appendChild(body); ai.appendChild(status);
+  scroll();
+  sendBtn.disabled = true;
+  let answer = "", phase = "";
+  const backend = aiBackend();
+  const working = () => (phase === "write" ? TXT.writing : TXT.thinking);
+  await streamPost("/api/chat", { session: sessionId(), lang: LANG, message: text, history: history.slice(-6), backend }, {
+    queue(n) { status.textContent = n > 0 ? TXT.waiting.replace("{n}", n) : working(); },
+    phase(p) { phase = p; status.textContent = working(); },
+    delta(s) { status.textContent = ""; answer += s; body.innerHTML = renderAnswer(answer); scroll(); },
+    error(msg) { status.textContent = backend === "gemini" ? msg : TXT.error; },
+    done(ev) {
+      status.remove();
+      const src = (ev.sources || []).filter((s) => s.type === "notice");
+      if (src.length) {
+        const el = document.createElement("div");
+        el.className = "src";
+        el.innerHTML = TXT.sources + ": " + src.map((s) =>
+          '<a href="/notices">' + escapeHtml(TXT.noticeAt.replace("{t}", s.hhmm)) + "「" + escapeHtml(s.title) + "」</a>").join(" / ");
+        ai.appendChild(el);
+      }
+      if (ev.backend) {  // FAQ 直答・ガードは AI を通らないのでタグ無し
+        const tag = document.createElement("div");
+        tag.className = "ai-mode " + ev.backend;
+        tag.textContent = ev.backend === "gemini" ? "Gemini" : "PC";
+        ai.appendChild(tag);
+      }
+    },
+  });
+  if (answer) {
+    history.push({ role: "user", content: text }, { role: "assistant", content: answer });
+    save();
+  }
+  sendBtn.disabled = false;
+  scroll();
+}
+
+document.getElementById("f").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const v = input.value; input.value = "";
+  ask(v);
+});
+document.querySelectorAll("#suggest button").forEach((b) => b.addEventListener("click", () => ask(b.dataset.q)));
+document.getElementById("reset").addEventListener("click", (e) => {
+  e.preventDefault(); history = []; save(); log.innerHTML = "";
+  document.getElementById("suggest").style.display = "";
+});
+</script>
+{% endblock %}

@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}{{ t('notices') }} | {{ profile.name }}{% endblock %}
+{% block body %}
+<h1>📢 {{ t('notices') }}</h1>
+{% for n in notices %}{% include "_notice.html" %}{% else %}<p class="muted">{{ t('no_notices') }}</p>{% endfor %}
+<p><a href="/">← {{ t('home') }}</a></p>
+<script>setTimeout(function(){ location.reload(); }, 60000);</script>
+{% endblock %}

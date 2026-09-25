@@ -1,0 +1,185 @@
+{% extends "staff/_base.html" %}
+{% block title %}対応の優先順{% endblock %}
+{% block body %}
+{% set periods = [(6, "直近6時間"), (24, "直近24時間"), (72, "直近3日"), (0, "すべて")] %}
+{% set qs = "kind=" ~ kind ~ "&topic=" ~ topic ~ "&vstatus=" ~ vstatus ~ "&lang=" ~ lang_f ~ "&q=" ~ (q | urlencode) %}
+<h1>対応の優先順 <span class="muted">未対応 {{ counts.open_total }} 件</span></h1>
+<div class="prio-counts">
+  <a href="/staff/cases"><span class="chip">{% if not level and not status %}▶ {% endif %}未対応 {{ counts.open_total }}</span></a>
+  {% for lv, label in LEVEL_LABEL.items() %}
+  <a href="/staff/cases?level={{ lv }}"><span class="chip lv-{{ lv }} {{ 'zero' if not counts.levels[lv] }}">{% if level == lv %}▶ {% endif %}{{ label }} {{ counts.levels[lv] }}</span></a>
+  {% endfor %}
+  <span class="muted">｜</span>
+  <a href="/staff/cases?status=in_progress"><span class="chip {{ 'zero' if not n_status.in_progress }}">{% if status == 'in_progress' %}▶ {% endif %}対応中 {{ n_status.in_progress or 0 }}</span></a>
+  <a href="/staff/cases?status=hold"><span class="chip {{ 'zero' if not n_status.hold }}">{% if status == 'hold' %}▶ {% endif %}保留 {{ n_status.hold or 0 }}</span></a>
+  <a href="/staff/cases?status=done"><span class="chip {{ 'zero' if not done_today }}">{% if status == 'done' %}▶ {% endif %}済み（今日） {{ done_today | length }}</span></a>
+  {% if counts.anonymous %}<span class="muted small">うち匿名 {{ counts.anonymous }}</span>{% endif %}
+</div>
+<p class="muted small">名簿の「運営に伝えたいこと」「要配慮」、避難所に伝える（伝言）、チャットの未対応の相談を、人ごとに 1 行にまとめて急ぐ順に並べています（AI は使いません）。
+  行をクリックすると中身が開きます。伝言は 1 件ずつ「対応中」「保留」「済み」に、メモを「記録して済みにする」とその人の未対応がまとめて済みになります。</p>
+
+{% if status == 'done' %}
+<section class="card">
+  <h2>今日済みにした伝言 <span class="muted">{{ done_today | length }} 件</span></h2>
+  <div class="table-wrap"><table>
+    <tr><th>済み</th><th>番号・氏名</th><th>用件</th><th>本文</th><th></th></tr>
+    {% for k in done_today %}
+    <tr class="done"><td class="small nowrap">{{ (k.handled_at or '')[11:16] }}</td>
+      <td><a href="/staff/roster/{{ k.evacuee_id }}">{{ k.evacuee_id }} {{ k.name or '' }}</a></td>
+      <td>{{ CASE_CATS.get(k.category, k.category) }}{% if k.urgent %} <span class="chip lv-3">急ぐ</span>{% endif %}</td>
+      <td class="voice-text">{{ k.text }}</td>
+      <td><form class="inline" method="post" action="/staff/cases/{{ k.id }}/status">
+        <input type="hidden" name="status" value="open"><input type="hidden" name="back" value="/staff/cases?status=done">
+        <button class="btn secondary small">未対応に戻す</button></form></td></tr>
+    {% else %}<tr><td colspan="5" class="muted">今日済みにした伝言はありません</td></tr>{% endfor %}
+  </table></div>
+</section>
+{% else %}
+<section class="card">
+  {% include "staff/_priority_rows.html" %}
+</section>
+{% endif %}
+
+<details class="card" id="voices"{{ ' open' if request.query_params.get('open') == 'voices' }}>
+  <summary><strong>質問と多い声</strong> <span class="muted small">チャットの話題別の件数・多い質問・答えられなかった質問 {{ s.unanswered }}</span></summary>
+  <div class="page-head">
+    <form method="get" class="row" style="margin:0">
+      <input type="hidden" name="open" value="voices">
+      <select name="hours" onchange="this.form.submit()">
+        {% for h, l in periods %}<option value="{{ h }}" {{ 'selected' if hours == h }}>{{ l }}</option>{% endfor %}
+      </select>
+    </form>
+    {% if gemini.available %}
+    <label class="switch" title="{{ gemini.model }}">
+      <input type="checkbox" id="ai-switch" aria-label="クラウド AI (Gemini)">
+      <span class="opt l">この PC の AI</span><span class="track"></span><span class="opt r">クラウド AI (Gemini)</span>
+    </label>
+    {% endif %}
+  </div>
+  <div class="grid">
+    <div class="stat"><div class="n {{ 'bad' if s.open_total }}">{{ s.open_total }}</div><div class="l">チャットの未対応（要望・困りごと・緊急）</div></div>
+    <div class="stat"><div class="n">{{ s.kinds.question }}</div><div class="l">質問</div></div>
+    <div class="stat"><div class="n {{ 'bad' if s.unanswered }}">{{ s.unanswered }}</div><div class="l">答えられなかった質問</div></div>
+    <div class="stat"><div class="n {{ 'bad' if s.kinds.emergency }}">{{ s.kinds.emergency }}</div><div class="l">緊急（暴力・急病のガード）</div></div>
+  </div>
+  <div class="cols">
+    <section class="card">
+      <h2>話題別の件数</h2>
+      {% if s.topics %}
+      <div class="table-wrap"><table>
+        <tr><th>話題</th><th>件数</th><th>質問</th><th>要望</th><th>困りごと</th><th>未対応</th><th>答えられず</th><th>最新</th><th></th></tr>
+        {% for t in s.topics %}
+        <tr><td><a href="/staff/cases?topic={{ t.key }}&hours={{ hours }}#voices-list">{{ t.label }}</a></td>
+          <td><strong>{{ t.total }}</strong></td><td>{{ t.question }}</td><td>{{ t.request }}</td><td>{{ t.trouble }}{% if t.emergency %} <span class="bad">+緊急{{ t.emergency }}</span>{% endif %}</td>
+          <td class="{{ 'bad' if t.open }}">{{ t.open }}</td><td class="{{ 'bad' if t.none }}">{{ t.none }}</td>
+          <td class="muted small">{{ t.latest_hhmm }}</td>
+          <td><a class="small" href="/staff/notices?category={{ t.notice_category }}&title={{ t.label | urlencode }}について">お知らせを作る</a></td></tr>
+        {% endfor %}
+      </table></div>
+      {% else %}<p class="muted">この期間の発言はありません</p>{% endif %}
+    </section>
+    <section class="card">
+      <h2>多い質問・答えられなかった質問</h2>
+      <p class="muted small">同じ内容の質問をまとめて多い順に。「答えられず」が付いた質問は、案内（shelter_info / faq）かお知らせに載せると減ります。</p>
+      {% for g in frequent %}
+      <p><strong>{{ g.count }}件</strong> <span class="chip">{{ g.topic_label }}</span>{% if g.none %} <span class="chip oc-none">答えられず {{ g.none }}</span>{% endif %}
+        <span class="voice-text">{{ g.text }}</span>
+        <a class="small" href="/staff/notices?category={{ TOPIC_CATEGORY.get(g.topic, 'other') }}&title={{ g.text[:40] | urlencode }}">→ お知らせにする</a>
+        <span class="muted small">最新 {{ g.latest_hhmm }}</span></p>
+      {% else %}<p class="muted">この期間の質問はありません</p>{% endfor %}
+    </section>
+  </div>
+  <section class="card">
+    <h2>AI に整理してもらう <span class="muted small" id="ai-status"></span></h2>
+    <p class="muted small">表示中の期間の発言（最大60件）を読んで、多い相談・急ぐ不満・お知らせに出すべき質問・今日やることを下書きします。判断は運営者が。
+      <span id="ai-note">すべて PC の中で動きます（外部に送りません）。</span></p>
+    <form id="ai-form" data-task="voices"><input type="hidden" name="hours" value="{{ hours }}"><p><button>整理する</button></p></form>
+    <div class="ai-out" id="ai-out"><span class="muted">ここに出ます</span></div>
+    <p class="noprint"><button type="button" class="secondary" id="copy">コピー</button></p>
+  </section>
+</details>
+
+<details class="card" id="voices-list"{{ ' open' if list_open }}>
+  <summary><strong>発言の一覧</strong> <span class="muted">{{ vrows | length }} 件</span> <span class="muted small">チャットの発言（匿名を含む）</span></summary>
+  <form class="row noprint" method="get" action="/staff/cases#voices-list">
+    <input type="hidden" name="hours" value="{{ hours }}">
+    <div><label>種類</label><select name="kind"><option value="">すべて</option>
+      {% for k, v in KINDS.items() %}<option value="{{ k }}" {{ 'selected' if kind == k }}>{{ v }}</option>{% endfor %}</select></div>
+    <div><label>話題</label><select name="topic"><option value="">すべて</option>
+      {% for k, v in TOPIC_LABEL.items() %}<option value="{{ k }}" {{ 'selected' if topic == k }}>{{ v }}</option>{% endfor %}</select></div>
+    <div><label>対応</label><select name="vstatus"><option value="">すべて</option>
+      <option value="open" {{ 'selected' if vstatus == 'open' }}>未対応</option><option value="done" {{ 'selected' if vstatus == 'done' }}>対応済み</option></select></div>
+    <div><label>言語</label><select name="lang"><option value="">すべて</option>
+      <option value="ja" {{ 'selected' if lang_f == 'ja' }}>日本語</option><option value="en" {{ 'selected' if lang_f == 'en' }}>English</option></select></div>
+    <div style="flex:2"><label>言葉で探す</label><input name="q" value="{{ q }}" style="width:100%"></div>
+    <div style="flex:0 0 auto"><button>絞り込む</button></div>
+    {% if list_open %}<div style="flex:0 0 auto"><a class="btn secondary" href="/staff/cases?hours={{ hours }}">解除</a></div>{% endif %}
+  </form>
+  <div class="table-wrap"><table>
+    <tr><th>時刻</th><th>種類</th><th>話題</th><th>発言</th><th>誰</th><th>回答</th><th>対応</th></tr>
+    {% for r in vrows %}
+    <tr class="{{ 'done' if r.status == 'done' }}">
+      <td class="small"><span class="muted">{{ r.date }}</span> <span class="time">{{ r.hhmm }}</span><div class="muted small">{{ 'EN' if r.lang == 'en' else 'JA' }}</div></td>
+      <td><span class="chip k-{{ r.kind }}">{{ r.kind_label }}</span>{% if r.classify_how and 'embed' in r.classify_how %} <span class="muted small" title="埋め込み（bge-m3）で近い例文から分類">AI</span>{% endif %}</td>
+      <td><a href="/staff/cases?topic={{ r.topic }}&hours={{ hours }}#voices-list">{{ r.topic_label }}</a></td>
+      <td class="voice-text">{{ r.content }}</td>
+      <td class="small nowrap">{% if r.evacuee_id %}<a href="/staff/roster/{{ r.evacuee_id }}#chats">{{ r.evacuee_name or ('No.' ~ r.evacuee_id) }}</a><div class="muted">受付 {{ r.evacuee_id }}</div>{% else %}<span class="muted">匿名</span>{% endif %}</td>
+      <td>{% if r.outcome %}<span class="chip oc-{{ r.outcome }}">{{ r.outcome_label }}</span>{% else %}<span class="muted small">—</span>{% endif %}</td>
+      <td>
+        <form method="post" action="/staff/voices/{{ r.id }}/status">
+          <input type="hidden" name="back" value="/staff/cases?{{ qs }}&hours={{ hours }}#voices-list">
+          {% if r.status == 'done' %}<input type="hidden" name="status" value="open"><button class="secondary small">未対応に戻す</button>
+            <div class="muted small">{{ (r.handled_at or '')[5:16] | replace('T', ' ') }}</div>
+          {% else %}<input type="hidden" name="status" value="done"><button class="small">対応済み</button>{% endif %}
+        </form>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="7" class="muted">該当なし</td></tr>
+    {% endfor %}
+  </table></div>
+</details>
+
+<details class="card small"><summary>レベルの決め方</summary>
+  <table>
+    <tr><td><span class="chip lv-3">至急</span></td><td>伝えたいこと: 透析・酸素（医療機器の電源）、薬が無い・診察が必要／要配慮: 医療機器／緊急の相談（急病・暴力のガードに掛かったもの）／伝言: 医療・体調、急ぎの伝言</td></tr>
+    <tr><td><span class="chip lv-2">今日中</span></td><td>伝えたいこと: 粉ミルク・おむつ／要配慮: 病気・けが、妊産婦、要介護／薬・体調の要望・困りごと／伝言: 乳幼児・妊産婦、安全・不安</td></tr>
+    <tr><td><span class="chip lv-1">通常</span></td><td>それ以外（移動の手助け・食事の制限・家族と連絡不通・不安・日本語／要配慮: 障がい、乳幼児同伴、アレルギー／75歳以上／その他の要望・困りごと／その他の用件の伝言）</td></tr>
+  </table>
+  <p class="muted">「急ぐ」にした伝言は 1 段上げます（至急が上限）。1 行のレベルは、その人の理由のうち一番高いもの。答えられなかった質問はここには入れず、「質問と多い声」に出します。</p>
+</details>
+{% endblock %}
+{% block scripts %}
+<script>
+if (typeof autoReload === "function") autoReload(30000);
+const form = document.getElementById("ai-form");
+const out = document.getElementById("ai-out");
+const st = document.getElementById("ai-status");
+const note = document.getElementById("ai-note");
+const NOTE = {
+  local: "すべて PC の中で動きます（外部に送りません）。",
+  gemini: "クラウド AI（Gemini）を使います。避難者の発言（匿名）が Google に送られます。名簿は送りません。",
+};
+const aiBackend = bindAiSwitch(document.getElementById("ai-switch"), (mode) => { note.textContent = NOTE[mode]; });
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const btn = form.querySelector("button");
+  btn.disabled = true;
+  const body = Object.fromEntries(new FormData(form).entries());
+  body.backend = aiBackend();
+  out.textContent = ""; st.textContent = "考えています…";
+  const t0 = performance.now();
+  let text = "";
+  await streamPost("/staff/api/ai/voices", body, {
+    queue(n) { st.textContent = n > 0 ? "順番待ち（前に " + n + " 件）" : "考えています…"; },
+    delta(s) { text += s; out.innerHTML = renderAnswer(text); st.textContent = "生成中…"; },
+    error(m) { st.textContent = ""; out.innerHTML = '<span class="bad">' + escapeHtml(m) + "</span>"; },
+    done(ev) {
+      st.textContent = "完了（" + ((performance.now() - t0) / 1000).toFixed(1) + " 秒）" + (ev.backend === "gemini" ? "（Gemini）" : "");
+    },
+  });
+  btn.disabled = false;
+});
+document.getElementById("copy").onclick = () => navigator.clipboard && navigator.clipboard.writeText(out.textContent);
+</script>
+{% endblock %}

@@ -1,0 +1,11 @@
+<article class="card notice">
+  <div class="meta">
+    <span class="time">{{ n.hhmm }}</span>
+    <span>{{ n.posted_at[5:10] | replace('-', '/') }}</span>
+    <span class="chip cat-{{ n.category }}">{{ n.category_label }}</span>
+    {% if lang == 'en' and n.lang == 'ja' %}<span class="small">(Japanese only)</span>{% endif %}
+    {% if n.machine_translated %}<span class="small">{{ t('machine') }}</span>{% endif %}
+  </div>
+  <h3>{{ n.title }}</h3>
+  <div class="body">{{ n.body }}</div>
+</article>

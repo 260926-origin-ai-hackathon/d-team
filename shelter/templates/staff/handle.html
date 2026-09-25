@@ -1,0 +1,45 @@
+{% extends "staff/_base.html" %}
+{% block title %}対応{% endblock %}
+{% block body %}
+<h1>対応 <span class="muted small">受付番号を読む → 個人ページで聞き取り・対応メモ</span></h1>
+<form class="card" method="get" action="/staff/handle">
+  <input class="handle-q" id="handle-q" name="q" value="{{ q }}" autofocus autocomplete="off"
+         placeholder="受付番号を読むか、番号・氏名を入力">
+  <p class="muted small">USB のバーコードリーダーは、この欄にカーソルが無くても読み取れます（数字だけなら個人ページへ直接移ります）。</p>
+</form>
+{% if q %}
+<section class="card">
+  <h2>「{{ q }}」の検索結果 <span class="muted">{{ rows | length }} 件</span></h2>
+  <ul class="plain">
+    {% for r in rows %}<li><a href="/staff/roster/{{ r.id }}#contact">{{ r.id }} {{ r.name }}</a>
+      <span class="muted small">（{{ r.hh }}人{% if r.kana %}・{{ r.kana }}{% endif %}{% if not r.active %}・退所済み{% endif %}）</span></li>
+    {% else %}<li class="muted">該当なし</li>{% endfor %}
+  </ul>
+</section>
+{% endif %}
+<section class="card">
+  <h2>最近対応した人</h2>
+  <ul class="plain">
+    {% for r in recent %}<li><a href="/staff/roster/{{ r.id }}#contact">{{ r.id }} {{ r.name }}</a>
+      <span class="muted small">{{ r.last[5:16] | replace('T', ' ') }}</span></li>
+    {% else %}<li class="muted">まだありません</li>{% endfor %}
+  </ul>
+</section>
+<script>
+// USB バーコードリーダー（キーボードとして入力する）: 入力欄の外で「連続した数字＋Enter」を拾って同じ動きをする
+(function () {
+  var buf = "", last = 0, box = document.getElementById("handle-q");
+  document.addEventListener("keydown", function (e) {
+    if (e.target === box || e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+    var t = Date.now();
+    if (t - last > 100) buf = "";   // 手で打つより速い連続入力だけを読み取りとみなす
+    last = t;
+    if (/^[0-9]$/.test(e.key)) { buf += e.key; return; }
+    if (e.key === "Enter" && buf.length >= 1) {
+      location.href = "/staff/handle?q=" + encodeURIComponent(buf);
+      buf = "";
+    }
+  });
+})();
+</script>
+{% endblock %}

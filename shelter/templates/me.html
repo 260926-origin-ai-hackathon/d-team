@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}{{ t('me') }} | {{ profile.name }}{% endblock %}
+{% block body %}
+{% set L = (CARE_EN if lang == 'en' else CARE) %}
+{% set N = (NEEDS_EN if lang == 'en' else NEEDS) %}
+{% if flag == 'new' %}<div class="banner">✅ {{ t('registered') }}</div>
+{% elif flag == 'saved' %}<div class="banner">✅ {{ t('saved') }}</div>
+{% elif flag == 'dup' %}<div class="banner">{{ t('already', n=me.id) }}</div>{% endif %}
+{% if sent %}<div class="banner">✅ {{ t('tell_sent') }}</div>{% endif %}
+{% if guard_msg %}<div class="banner warn">{{ guard_msg }}</div>{% endif %}
+<div class="card mycard">
+  <div class="muted">{{ t('receipt_no') }}</div>
+  <div class="bigno">{{ me.id }}</div>
+  <div class="myname">{{ me.name }}<span class="muted"> · {{ me.hh }} {{ t('people') }}</span></div>
+  {% if me.members %}<div class="muted small">{% for m in me.members %}{{ m.name }}{% if m.age is not none %}（{{ m.age }}）{% endif %}{{ '・' if not loop.last }}{% endfor %}</div>{% endif %}
+  <img class="barcode" src="/me/barcode.svg" alt="{{ t('receipt_no') }} {{ barcode_text(me.id) }}">
+  <div class="barno">{{ barcode_text(me.id) }}</div>
+  <p class="small muted">{{ t('bar_hint') }}</p>
+</div>
+<div class="card">
+  <h2>{{ t('my_needs') }}</h2>
+  {% if me.needs or me.care or me.note %}
+  <ul class="plain">
+    {% for k in me.needs %}<li>• {{ N[k] }}</li>{% endfor %}
+    {% for k in me.care %}<li>• {{ L[k] }}{% if k == 'ALG' and me.alg %}（{% for a in me.alg %}{{ ALLERGY[a] }}{{ '・' if not loop.last }}{% endfor %}）{% endif %}</li>{% endfor %}
+    {% if me.note %}<li>• {{ me.note }}</li>{% endif %}
+  </ul>
+  {% else %}<p class="muted">{{ t('none') }}</p>{% endif %}
+  <p><a class="btn secondary" href="/register">{{ t('edit_reg') }}</a></p>
+</div>
+<div class="card" id="told">
+  <h2>{{ t('tell_list') }}</h2>
+  {% if told %}
+  <ul class="telllist">
+    {% for k in told %}<li><strong>{{ CATS.get(k.category, k.category) }}</strong>{% if k.urgent %} ⚡{{ t('tell_urgent') }}{% endif %}
+      <span class="muted small">{{ k.created_at[5:10].replace('-', '/') }} {{ k.created_at[11:16] }}</span>
+      <span class="chip">{{ STATUSES.get(k.status, k.status) }}</span>
+      {% if k.text %}<div class="small">{{ k.text }}</div>{% endif %}</li>{% endfor %}
+  </ul>
+  {% else %}<p class="muted">{{ t('tell_none') }}</p>{% endif %}
+  <p><a class="bigbtn tell" href="/tell">📣 {{ t('tell') }}</a></p>
+</div>
+<div class="bigbtns">
+  <a class="bigbtn primary" href="/chat">💬 {{ t('chat') }}</a>
+  <a class="bigbtn" href="/">🏠 {{ t('home') }}</a>
+</div>
+{% endblock %}

@@ -1,0 +1,93 @@
+{# 対応の優先順の行（ダッシュボードの上位と /staff/cases の全件で共通）。rows = priority.items()
+   行をクリック（か ▸）すると、その人の未対応の中身（伝言の本文・相談・登録時の伝えたいこと）とメモ欄が開く #}
+{% set presets = ["保健師に引き継ぎ", "薬の名前と残りを確認", "福祉スペースへ案内", "本部へ物資要請", "様子見"] %}
+{% set back = path ~ ('?' ~ request.url.query if request.url.query else '') %}
+<div class="table-wrap">
+<table class="prio">
+  <tr><th></th><th>レベル</th><th>番号</th><th>氏名（人数）</th><th>理由</th><th>待ち</th></tr>
+  {% for r in rows %}
+  {% set did = 'pd-' ~ (r.id if r.id is not none else 'a' ~ r.log_id) %}
+  <tr class="lv-{{ r.level }} prio-row" data-detail="{{ did }}">
+    <td class="nowrap"><button type="button" class="btn secondary small toggle" aria-expanded="false" aria-controls="{{ did }}" title="中身を開く">▸</button></td>
+    <td class="nowrap"><span class="chip lv-{{ r.level }}">{{ r.level_label }}</span></td>
+    {% if r.id is not none %}
+    <td><a href="/staff/roster/{{ r.id }}">{{ r.id }}</a></td>
+    <td><a href="/staff/roster/{{ r.id }}">{{ r.name }}</a>（{{ r.hh }}人）{% if r.note %}<div class="muted small">{{ r.note }}</div>{% endif %}</td>
+    {% else %}
+    <td class="muted">—</td>
+    <td>匿名<div class="muted small">受付番号の無い端末からの相談</div></td>
+    {% endif %}
+    <td>{% for x in r.reasons %}<span class="tag lv-{{ x.level }}">{{ x.label }}{% if x.who and x.who.startswith('同行') %} <span class="who">{{ x.who }}</span>{% endif %}</span>{% endfor %}</td>
+    <td class="nowrap">{% if r.waiting_min >= 60 %}{{ r.waiting_min // 60 }}時間{{ r.waiting_min % 60 }}分{% else %}{{ r.waiting_min }}分{% endif %}
+      <div class="muted small">{{ r.since[11:16] }} から</div></td>
+  </tr>
+  <tr class="prio-detail" id="{{ did }}" hidden><td colspan="6">
+    {% set msgs = r.reasons | selectattr('case_id') | list %}
+    {% set talks = r.reasons | selectattr('log_id') | list %}
+    {% set regs = r.reasons | rejectattr('case_id') | rejectattr('log_id') | list %}
+    {% for x in msgs %}
+    <div class="item">
+      <div><span class="tag lv-{{ x.level }}">伝言</span> <strong>{{ x.category_label }}</strong>{% if x.urgent %} <span class="chip lv-3">急ぐ</span>{% endif %}
+        <span class="muted small">{{ x.created_at[5:16] | replace('T', ' ') }}・{{ CASE_STATUSES.get(x.case_status, x.case_status) }}</span></div>
+      <p class="voice-text body">{{ x.text or '（本文なし）' }}</p>
+      <div class="case-btns">{% for st, lb in [('in_progress', '対応中'), ('hold', '保留'), ('done', '済み')] %}{% if st != x.case_status %}<form class="inline" method="post" action="/staff/cases/{{ x.case_id }}/status">
+        <input type="hidden" name="status" value="{{ st }}"><input type="hidden" name="back" value="{{ back }}">
+        <button class="btn small {{ 'secondary' if st != 'done' }}">{{ lb }}</button></form>{% endif %}{% endfor %}</div>
+    </div>
+    {% endfor %}
+    {% for x in talks %}
+    <div class="item">
+      <div><span class="tag lv-{{ x.level }}">相談</span> <strong>{{ x.kind_label }}</strong> <span class="muted small">{{ x.created_at[5:16] | replace('T', ' ') }}</span></div>
+      <p class="voice-text body">{{ x.text }}</p>
+      {% if x.answer %}<p class="muted small ans">AI の答え → {{ x.answer[:300] }}{% if x.answer | length > 300 %}…{% endif %}</p>{% endif %}
+      <form class="inline" method="post" action="/staff/voices/{{ x.log_id }}/status">
+        <input type="hidden" name="status" value="done"><input type="hidden" name="back" value="{{ back }}">
+        <button class="btn small">済み</button></form>
+    </div>
+    {% endfor %}
+    {% if regs %}
+    <div class="item"><span class="tag">登録時の伝えたいこと・要配慮</span>
+      <ul class="small">{% for x in regs %}<li>{{ x.label }}{% if x.who and x.who != '本人' %}（{{ x.who }}）{% endif %}</li>{% endfor %}</ul>
+      {% if r.note %}<p class="small">「{{ r.note }}」</p>{% endif %}</div>
+    {% endif %}
+    {% if r.id is not none %}
+    <form method="post" action="/staff/roster/{{ r.id }}/contact" class="memo">
+      <input type="hidden" name="back" value="{{ back }}">
+      <div class="presets">{% for p in presets %}<button type="button" class="btn secondary small preset" data-text="{{ p }}">{{ p }}</button>{% endfor %}</div>
+      <textarea name="note" maxlength="500" rows="2" required placeholder="対応のメモ（例: 保健師に引き継ぎ。14時に再確認）"></textarea>
+      <div><button name="close" value="1">記録して済みにする</button>
+        <button name="close" value="0" class="secondary">記録だけ</button>
+        <a class="small" href="/staff/roster/{{ r.id }}#contact">個人ページ →</a></div>
+    </form>
+    {% endif %}
+  </td></tr>
+  {% else %}
+  <tr><td colspan="6" class="muted">いま対応を待っている人はいません</td></tr>
+  {% endfor %}
+</table>
+</div>
+<script>
+(function () {
+  if (window.__prioRows) return; window.__prioRows = true;
+  document.addEventListener("click", function (e) {
+    var p = e.target.closest(".preset");
+    if (p) {
+      var t = p.closest("form").querySelector("textarea");
+      t.value = t.value ? t.value + "。" + p.dataset.text : p.dataset.text; t.focus(); return;
+    }
+    var row = e.target.closest("tr.prio-row");
+    if (!row || (e.target.closest("a, form, input, textarea") && !e.target.closest(".toggle"))) return;
+    var d = document.getElementById(row.dataset.detail), b = row.querySelector(".toggle");
+    d.hidden = !d.hidden; b.textContent = d.hidden ? "▸" : "▾"; b.setAttribute("aria-expanded", String(!d.hidden));
+  });
+})();
+// 30 秒ごとに更新。ただし行を開いているとき・入力中は更新しない
+function autoReload(ms) {
+  setInterval(function () {
+    var a = document.activeElement;
+    if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return;
+    if (document.querySelector("details[open], .prio-detail:not([hidden])")) return;
+    location.reload();
+  }, ms);
+}
+</script>

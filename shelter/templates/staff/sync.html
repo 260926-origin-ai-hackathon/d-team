@@ -1,0 +1,58 @@
+{% extends "staff/_base.html" %}
+{% block title %}本部へ送る{% endblock %}
+{% block body %}
+<h1>ネット復旧・本部へ送る</h1>
+<div class="cols">
+  <section class="card">
+    <h2>送る</h2>
+    <p>名簿 CSV（標準様式順・個人情報を含む）と、集計 JSON（EEI「避難所等」・個人情報なし）の <strong>2 ファイル</strong>を、
+      設定した送り先へ送ります。控えは必ず <code>{{ outbox }}</code> に残ります。</p>
+    <p>送り先: <strong>{{ transports[transport] or transport }}</strong>{% if transport == 'http' %}（{{ sync_url or 'URL 未設定' }}）{% endif %}</p>
+    <p><button id="sync-btn" style="font-size:1.2rem;padding:12px 22px">🌐 ネット復旧 — 本部へ送る</button></p>
+    <div id="sync-result"></div>
+    <p class="muted small">最終送信: {{ last_sync or '未送信' }}</p>
+    <p><a href="/staff/export/roster.csv">名簿 CSV だけ保存</a> · <a href="/staff/export/eei.json" target="_blank">集計 JSON を見る</a></p>
+    <p class="muted small">名簿（個人情報）を送る先は、避難所を開設した市町村の災害対策本部に限ってください。国へ上がるのは集計値だけです。</p>
+  </section>
+  <section class="card">
+    <h2>送り先の設定</h2>
+    <form method="post" action="/staff/sync/settings">
+      <label>送り先</label>
+      <select name="transport">{% for k, v in transports.items() %}<option value="{{ k }}" {{ 'selected' if k == transport }}>{{ v }}</option>{% endfor %}</select>
+      <label>HTTP の URL（http を選んだとき）</label>
+      <input name="sync_url" style="width:100%" value="{{ sync_url }}" placeholder="https://example.city.lg.jp/shelter/upload">
+      <p class="muted small">トークン（Authorization: Bearer）は <code>.env</code> の <code>SYNC_TOKEN</code> に書きます（{{ '設定済み' if token_set else '未設定' }}）。</p>
+      <p><button class="secondary">保存</button></p>
+    </form>
+  </section>
+</div>
+<section class="card">
+  <h2>送信ログ</h2>
+  <div class="table-wrap"><table>
+    <tr><th>時刻</th><th>送り先</th><th>内容</th><th>結果</th><th>宛先</th><th>詳細</th></tr>
+    {% for l in logs %}
+    <tr><td>{{ l.created_at[5:19] | replace('T', ' ') }}</td><td>{{ l.transport }}</td><td>{{ l.payload_kind }}</td>
+      <td class="{{ 'ok' if l.status == 'ok' else 'bad' }}">{{ '成功' if l.status == 'ok' else '失敗' }}</td>
+      <td class="small"><code>{{ l.target }}</code></td><td class="small">{{ l.detail }}</td></tr>
+    {% else %}<tr><td colspan="6" class="muted">まだありません</td></tr>{% endfor %}
+  </table></div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+document.getElementById("sync-btn").onclick = async (e) => {
+  e.target.disabled = true;
+  const box = document.getElementById("sync-result");
+  box.innerHTML = '<p class="muted">送信中…</p>';
+  try {
+    const r = await fetch("/staff/sync", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error ? j.error.message : "HTTP " + r.status);
+    box.innerHTML = "<ul>" + j.sent.map((s) => '<li class="' + (s.ok ? "ok" : "bad") + '">' + escapeHtml(s.file || s.kind) + ": " +
+      (s.ok ? "成功" : "失敗") + ' <span class="muted small">' + escapeHtml(s.detail) + "</span></li>").join("") + "</ul>";
+    setTimeout(() => location.reload(), 2500);
+  } catch (err) { box.innerHTML = '<p class="bad">' + escapeHtml(err.message) + "</p>"; }
+  e.target.disabled = false;
+};
+</script>
+{% endblock %}

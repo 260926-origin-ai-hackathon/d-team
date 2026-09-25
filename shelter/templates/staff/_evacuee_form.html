@@ -1,0 +1,42 @@
+{# 受付の手入力フォームと名簿の編集で共通。ev は既存の登録（新規なら None） #}
+{% from "_members.html" import members_editor %}
+{# staff=False は避難者が PC の前で自分で入力する受付画面（運営メモの欄を出さない） #}
+{% macro evacuee_fields(ev=None, staff=True) %}
+<div class="row">
+  <div><label>氏名 *</label><input name="name" required value="{{ ev.name if ev else '' }}"></div>
+  <div><label>ふりがな</label><input name="kana" value="{{ ev.kana or '' if ev else '' }}"></div>
+</div>
+<label>住所</label><input name="addr" style="width:100%" value="{{ ev.addr or '' if ev else '' }}">
+<div class="row">
+  <div><label>性別</label>
+    <select name="sex">{% for k, v in SEX.items() %}
+      <option value="{{ k }}" {{ 'selected' if (ev and ev.sex == k) or (not ev and k == 'X') }}>{{ v }}</option>{% endfor %}
+    </select></div>
+  <div><label>生年月日</label><input name="dob" type="date" value="{{ ev.dob or '' if ev else '' }}"></div>
+  {% if not ev %}<div><label>年齢（生年月日が不明なとき）</label><input name="age" type="number" min="0" max="120"></div>{% endif %}
+  <div><label>人数（本人を含む・名前を登録しない人も）</label><input name="hh" type="number" min="1" max="30" value="{{ ev.hh if ev else 1 }}"></div>
+</div>
+<label>要配慮（任意・本人の申し出）</label>
+<div class="checks">{% for k, v in CARE.items() %}
+  <label><input type="checkbox" name="care" value="{{ k }}" {{ 'checked' if ev and k in ev.care }}> {{ v }}</label>{% endfor %}
+</div>
+<label>アレルギーの内訳</label>
+<div class="checks">{% for k, v in ALLERGY.items() %}
+  <label><input type="checkbox" name="alg" value="{{ k }}" {{ 'checked' if ev and k in ev.alg }}> {{ v }}</label>{% endfor %}
+</div>
+<label>運営に伝えたいこと（本人の申し出・急ぐものが上）</label>
+<div class="checks">{% for k, v in NEEDS.items() %}
+  <label><input type="checkbox" name="needs" value="{{ k }}" {{ 'checked' if ev and k in ev.needs }}> {{ v }}</label>{% endfor %}
+</div>
+<label>同行者（家族）</label>
+{{ members_editor(ev.members if ev else [], hh_input=True) }}
+<label>本人からの自由記述（200文字まで）</label><input name="note" maxlength="200" style="width:100%" value="{{ ev.note or '' if ev else '' }}">
+<div class="row">
+  <div><label>使う言語</label>
+    <select name="lang">{% for k, v in LANGS.items() %}
+      <option value="{{ k }}" {{ 'selected' if ev and ev.lang == k }}>{{ v }}</option>{% endfor %}
+    </select></div>
+  <div><label>同行ペットの数</label><input name="pet" type="number" min="0" max="20" value="{{ ev.pet if ev else 0 }}"></div>
+</div>
+{% if staff %}<label>運営メモ（本人には見せない）</label><input name="staff_note" style="width:100%" value="{{ ev.staff_note or '' if ev else '' }}">{% endif %}
+{% endmacro %}

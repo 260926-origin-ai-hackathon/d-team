@@ -1,0 +1,88 @@
+{% extends "staff/_base.html" %}
+{% block title %}ダッシュボード{% endblock %}
+{% block body %}
+<h1>ダッシュボード</h1>
+{% if not health.warm %}<div class="banner warn">AI（{{ health.model }}）を準備中です。起動直後は30〜60秒かかります。{% if health.last_error %}<br>エラー: {{ health.last_error }}{% endif %}</div>{% endif %}
+
+<section class="card prio-card" id="priority">
+  <h2>対応の優先順 <span class="muted">未対応 {{ prio_counts.open_total }} 件</span>
+    <a href="/staff/cases"><span class="chip {{ 'lv-2' if prio_counts.cases_open else 'zero' }}">伝える 未対応 {{ prio_counts.cases_open }}</span></a></h2>
+  <div class="prio-counts">
+    {% for lv, label in LEVEL_LABEL.items() %}
+    <a href="/staff/cases?level={{ lv }}"><span class="chip lv-{{ lv }} {{ 'zero' if not prio_counts.levels[lv] }}">{{ label }} {{ prio_counts.levels[lv] }}</span></a>
+    {% endfor %}
+    {% if prio_counts.anonymous %}<span class="muted small">うち匿名の相談 {{ prio_counts.anonymous }}</span>{% endif %}
+    <span class="muted">｜</span>
+    <a href="/staff/cases?vstatus=open&hours=0#voices-list"><span class="chip {{ 'zero' if not (voices.open.request + voices.open.trouble) }}">未対応の要望・困りごと {{ voices.open.request + voices.open.trouble }}</span></a>
+    <a href="/staff/cases?kind=question&hours=0&open=voices#voices"><span class="chip {{ 'zero' if not voices.unanswered }}">答えられなかった質問 {{ voices.unanswered }}</span></a>
+    {% if voices.kinds.emergency %}<a href="/staff/cases?kind=emergency&hours=0#voices-list"><span class="chip lv-3">緊急（ガード） {{ voices.kinds.emergency }}</span></a>{% endif %}
+  </div>
+  {% set rows = prio %}
+  {% include "staff/_priority_rows.html" %}
+  <p class="small">{% if prio_counts.open_total > prio | length %}上位 {{ prio | length }} 件を表示。{% endif %}<a href="/staff/cases">全件を見る →</a>
+    <span class="muted">（名簿の伝えたいこと・要配慮、伝言、チャットの未対応の相談を人ごとにまとめてルールで並べています。行をクリックすると中身とメモ欄が開きます）</span></p>
+</section>
+
+<div class="grid">
+  <div class="stat"><div class="n" id="s-total">{{ s.total }}</div><div class="l">在所人数（同行者含む）</div></div>
+  <div class="stat"><div class="n">{{ s.households }}</div><div class="l">世帯（受付件数）</div></div>
+  <div class="stat"><div class="n">{{ s.female }} / {{ s.male }} / {{ s.unknown }}</div><div class="l">女 / 男 / 不明（名前未登録の同行者を含む）</div></div>
+  <div class="stat"><div class="n">{{ s.infants }}</div><div class="l">乳幼児</div></div>
+  <div class="stat"><div class="n">{{ s.elderly }}</div><div class="l">65歳以上（登録した同行者を含む）</div></div>
+  <div class="stat"><div class="n">{{ s.care_people }}</div><div class="l">要配慮の申し出</div></div>
+  <div class="stat"><div class="n">{{ s.pets }}</div><div class="l">ペット</div></div>
+  <div class="stat"><div class="n">{{ health.queue }}</div><div class="l">AI 待ち人数</div></div>
+  <div class="stat"><div class="n">{{ b.area.in_pct if b.area.in_pct is not none else '—' }}{% if b.area.in_pct is not none %}<small>%</small>{% endif %}</div>
+    <div class="l">想定地区（{{ b.area.towns[0] if b.area.towns else '未設定' }}）の住民（{{ b.area['in'].people }}人／{{ b.area['in'].households }}世帯）
+      <br>区外 {{ b.area.out.people }}人／{{ b.area.out.households }}世帯・住所なし {{ b.area.unknown.people }}人</div></div>
+  <div class="stat"><div class="n">{{ b.non_japanese.people }}<small>人</small></div>
+    <div class="l">日本語以外（{{ b.non_japanese.households }}世帯{% for k, v in b.non_japanese.by_lang.items() %}・{{ LANGS.get(k, '言語不明' if k == 'unknown' else k) }} {{ v }}{% endfor %}）</div></div>
+  <div class="stat"><div class="n">{{ b.needs.households }}</div><div class="l">支援が要る世帯（伝えたいこと・要配慮のどちらか）</div></div>
+</div>
+
+<div class="cols">
+  <section class="card">
+    <h2>要配慮者の内訳</h2>
+    <table>
+      {% for k, v in CARE.items() %}<tr><td><a href="/staff/roster?care={{ k }}">{{ v }}</a></td><td>{{ s.care[k] }}</td></tr>{% endfor %}
+      {% if s.allergy %}<tr><td>アレルギー内訳</td><td>{% for k, v in s.allergy.items() %}{{ ALLERGY[k] }} {{ v }}{% if not loop.last %}・{% endif %}{% endfor %}</td></tr>{% endif %}
+      <tr><td>使う言語</td><td>{% for k, v in s.languages.items() %}{{ LANGS.get(k, k) }} {{ v }}{% if not loop.last %}・{% endif %}{% endfor %}</td></tr>
+    </table>
+    <h3>運営に伝えたいこと（世帯数）</h3>
+    <table>
+      {% for k, v in NEEDS.items() %}<tr><td>{{ v }}</td><td>{{ b.needs.by_need[k] }}</td></tr>{% endfor %}
+      <tr><td>受付の方法</td><td>{% for k, v in SOURCE.items() %}{{ v }} {{ b.source[k] }}{% if not loop.last %}・{% endif %}{% endfor %} 世帯</td></tr>
+    </table>
+    <p><a href="/staff/ai?tab=care">AI で声かけの優先順を見る →</a></p>
+  </section>
+  <section class="card">
+    <h2>不足物資の目安（1日分）</h2>
+    <table>
+      <tr><th>品目</th><th>必要</th><th>備蓄</th><th>不足</th></tr>
+      {% for x in supplies %}
+      <tr><td>{{ x.item }}</td><td>{{ x.need }} {{ x.unit }}</td>
+        <td>{{ x.stock if x.stock is not none else '—' }}</td>
+        <td class="{{ 'bad' if x.short }}">{{ x.short if x.short is not none else '—' }}</td></tr>
+      {% endfor %}
+    </table>
+    <p class="muted small">ルール計算（水3L/人/日・食事3食/人/日・毛布1枚/人・トイレ1基/20人 ほか）。備蓄量は <a href="/staff/settings#stock">設定</a> で入力。</p>
+  </section>
+  <section class="card">
+    <h2>最新のお知らせ</h2>
+    {% for n in notices %}<p><span class="time">{{ n.hhmm }}</span> <span class="chip cat-{{ n.category }}">{{ n.category_label }}</span> {{ n.title }}</p>{% else %}<p class="muted">まだありません</p>{% endfor %}
+    <p><a href="/staff/notices">お知らせを投稿する →</a></p>
+  </section>
+  <section class="card">
+    <h2>システム</h2>
+    <table>
+      <tr><td>AI モデル</td><td>{{ health.model }} {% if health.warm %}<span class="ok">準備OK</span>{% else %}<span class="bad">準備中</span>{% endif %}{% if health.tokens_per_sec %} · {{ health.tokens_per_sec }} tok/s{% endif %}</td></tr>
+      <tr><td>クラウド AI</td><td>{{ gemini.model }} {% if gemini.available %}<span class="ok">キー設定済み</span>{% else %}<span class="muted">キー未設定（使わない）</span>{% endif %}{% if gemini.last_error %}<br><span class="bad small">最後のエラー: {{ gemini.last_error }}</span>{% endif %} · <a href="/staff/settings#gemini">設定</a></td></tr>
+      <tr><td>マニュアル検索</td><td>{{ health.embed_model }} · {{ manual.chunks }} チャンク {% if manual.running %}（取り込み中 {{ manual.done }}/{{ manual.total }}）{% endif %}</td></tr>
+      <tr><td>避難者の入口</td><td><code>{{ profile.entry_url }}</code>（Wi-Fi: {{ profile.ssid }}）</td></tr>
+      <tr><td>本部へ最終送信</td><td>{{ last_sync or '未送信' }}</td></tr>
+      <tr><td>退所済み</td><td>{{ s.checked_out }} 件</td></tr>
+    </table>
+  </section>
+</div>
+<script>autoReload(30000);</script>
+{% endblock %}

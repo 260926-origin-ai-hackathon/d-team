@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}{{ t('tell') }} | {{ profile.name }}{% endblock %}
+{% block body %}
+<h1>📣 {{ t('tell') }}</h1>
+<p class="muted">{{ t('tell_sub') }}</p>
+{% if error %}<div class="banner warn">{{ error }}</div>{% endif %}
+<form class="card tellform" method="post" action="/tell">
+  <div><strong>{{ t('tell_what') }}</strong></div>
+  <div class="cats">
+    {% for k, label in CATS.items() %}
+    <label><input type="radio" name="category" value="{{ k }}" required {{ 'checked' if k == category }}>{{ label }}</label>
+    {% endfor %}
+  </div>
+  <p><label style="font-weight:700"><input type="checkbox" name="urgent" value="1"> {{ t('tell_urgent') }}</label>
+    <span class="muted small">{{ t('tell_urgent_sub') }}</span></p>
+  <label for="tell-text"><strong>{{ t('tell_text') }}</strong></label>
+  <textarea id="tell-text" name="text" maxlength="200" placeholder="{{ t('tell_ph') }}">{{ text or '' }}</textarea>
+  <p class="muted small">{{ t('tell_as', n=me.id) }}</p>
+  <p><button type="submit">{{ t('tell_send') }}</button></p>
+</form>
+<p><a href="/">🏠 {{ t('home') }}</a></p>
+{% endblock %}

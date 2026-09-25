@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% from "_members.html" import members_editor %}
+{% block title %}{{ t('register') }} | {{ profile.name }}{% endblock %}
+{% block body %}
+{% set L = (CARE_EN if lang == 'en' else CARE) %}
+{% set N = (NEEDS_EN if lang == 'en' else NEEDS) %}
+{% set S = (SEX_EN if lang == 'en' else SEX) %}
+<h1>📝 {{ t('edit_reg') if me else t('register') }}</h1>
+{% if me %}<div class="banner">{{ t('already', n=me.id) }} <a href="/me">{{ t('me') }} →</a></div>
+{% else %}<p class="muted">{{ t('reg_intro') }}</p>{% endif %}
+{% if error %}<div class="banner warn">{{ error }}</div>{% endif %}
+<form method="post" action="/register" class="card regform" autocomplete="on">
+  <input type="hidden" name="dev" id="dev">
+  <label>{{ t('name') }} <span class="req">*</span></label>
+  <input name="name" required maxlength="60" value="{{ ev.name if ev else '' }}" autocomplete="name">
+  {% if lang == 'ja' %}<label>{{ t('kana') }}</label><input name="kana" maxlength="60" value="{{ ev.kana or '' if ev else '' }}">{% endif %}
+  <label>{{ t('addr') }}</label>
+  <input name="addr" maxlength="200" value="{{ ev.addr or '' if ev else '' }}" autocomplete="street-address"
+         placeholder="{% if lang == 'en' %}e.g. Higashinoda 2-3, Miyakojima{% else %}例: 都島区東野田町2-3{% endif %}">
+  <div class="row">
+    <div><label>{{ t('sex') }}</label>
+      <select name="sex">{% for k, v in S.items() %}<option value="{{ k }}" {{ 'selected' if (ev and ev.sex == k) or (not ev and k == 'X') }}>{{ v }}</option>{% endfor %}</select></div>
+    <div><label>{{ t('age') }}</label><input name="age" type="number" inputmode="numeric" min="0" max="120" value="{{ ev.age if ev and ev.age is not none else '' }}"></div>
+  </div>
+  <label>{{ t('care') }}</label>
+  <div class="checks big">{% for k, v in L.items() %}
+    <label><input type="checkbox" name="care" value="{{ k }}" {{ 'checked' if ev and k in ev.care }}> {{ v }}</label>{% endfor %}
+  </div>
+  <label>{{ t('alg') }}</label>
+  <div class="checks big">{% for k, v in ALLERGY.items() %}
+    <label><input type="checkbox" name="alg" value="{{ k }}" {{ 'checked' if ev and k in ev.alg }}> {{ v }}</label>{% endfor %}
+  </div>
+  <label class="needs-label">{{ t('needs') }}</label>
+  <div class="checks big needs">{% for k, v in N.items() %}
+    <label><input type="checkbox" name="needs" value="{{ k }}" {{ 'checked' if ev and k in ev.needs }}> {{ v }}</label>{% endfor %}
+  </div>
+  <label>{{ t('note') }}</label>
+  <textarea name="note" rows="3" maxlength="200" placeholder="{{ t('note_ph') }}">{{ ev.note or '' if ev else '' }}</textarea>
+
+  <h2 class="members-title">👨‍👩‍👧 {{ t('members') }}</h2>
+  <p class="muted small">{{ t('members_hint') }}</p>
+  {{ members_editor(ev.members if ev else [], en=(lang == 'en'), big=True) }}
+  <label>{{ t('pet') }}</label><input name="pet" type="number" inputmode="numeric" min="0" max="20" value="{{ ev.pet if ev else 0 }}">
+
+  <p><button class="wide">{{ t('submit_reg') if not me else t('edit_reg') }}</button></p>
+  <p class="muted small">{% if me %}<a href="/">{{ t('home') }}</a>{% else %}<a href="/">{{ t('skip_reg') }}</a>{% endif %}</p>
+</form>
+{% endblock %}
+{% block scripts %}
+<script src="/static/app.js"></script>
+<script>
+// 端末ごとの ID を付けて送る（同じスマホから2回送っても二重登録にならない）
+document.getElementById("dev").value = sessionId();
+</script>
+{% endblock %}

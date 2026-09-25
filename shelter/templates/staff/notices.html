@@ -1,0 +1,59 @@
+{% extends "staff/_base.html" %}
+{% block title %}お知らせ{% endblock %}
+{% block body %}
+<h1>お知らせ</h1>
+{% if msg %}<div class="banner">{{ msg }}</div>{% endif %}
+<form class="card" method="post" action="/staff/notices" id="post-form">
+  <h2>新しく投稿（日本語）</h2>
+  <div class="row">
+    <div><label>カテゴリ</label><select name="category">
+      {% for k, v in CATEGORIES.items() %}<option value="{{ k }}" {{ 'selected' if prefill_category == k }}>{{ v[0] }}</option>{% endfor %}</select></div>
+    <div><label>掲載時刻</label><input type="datetime-local" name="posted_at" value="{{ now_local }}"></div>
+    <div><label>英訳</label><select name="translate"><option value="1">AI で英訳を作る</option><option value="0">作らない</option></select></div>
+  </div>
+  <label>見出し *</label><input name="title" required style="width:100%" placeholder="例: 夕食の配給" value="{{ prefill_title }}">
+  <label>本文 *</label><textarea name="body" rows="3" required placeholder="例: 15:00 から体育館前で配給します。お皿と箸を持ってきてください。"></textarea>
+  <p><button id="post-btn">投稿する</button> <span class="muted small" id="post-wait" style="display:none">英訳を作っています（10〜30秒）…</span></p>
+</form>
+
+<h2>投稿済み</h2>
+{% for g in groups %}
+<div class="card notice" id="g{{ g.group_id }}">
+  <div class="meta"><span class="time">{{ hhmm(g.posted_at) }}</span><span>{{ g.posted_at[5:10] | replace('-', '/') }}</span>
+    <span class="chip cat-{{ g.category }}">{{ CATEGORIES.get(g.category, CATEGORIES['other'])[0] }}</span></div>
+  <div class="cols">
+    <div>
+      <div class="muted small">日本語</div>
+      {% if g.ja %}<h3>{{ g.ja.title }}</h3><div class="body">{{ g.ja.body }}</div>{% endif %}
+    </div>
+    <div>
+      <div class="muted small">English {% if g.en and g.en.machine_translated %}（AI 翻訳・未確認）{% elif g.en %}（確認済み）{% endif %}</div>
+      {% if edit == g.group_id or not g.en %}
+      <form method="post" action="/staff/notices/{{ g.group_id }}/en">
+        <input name="title" style="width:100%" value="{{ g.en.title if g.en else '' }}" placeholder="Title" required>
+        <textarea name="body" rows="3" placeholder="Body" required>{{ g.en.body if g.en else '' }}</textarea>
+        <button>英語版を保存</button>
+      </form>
+      {% else %}
+      <h3>{{ g.en.title }}</h3><div class="body">{{ g.en.body }}</div>
+      <a href="/staff/notices?edit={{ g.group_id }}#g{{ g.group_id }}">直す</a>
+      {% endif %}
+    </div>
+  </div>
+  <div class="row noprint" style="margin-top:8px;justify-content:flex-end">
+    {% if g.ja %}<form method="post" action="/staff/notices/{{ g.group_id }}/translate" style="flex:0 0 auto"><button class="secondary">英訳を作り直す</button></form>{% endif %}
+    <form method="post" action="/staff/notices/{{ g.group_id }}/delete" style="flex:0 0 auto" onsubmit="return confirm('削除しますか？')"><button class="danger">削除</button></form>
+  </div>
+</div>
+{% else %}
+<p class="muted">まだありません</p>
+{% endfor %}
+{% endblock %}
+{% block scripts %}
+<script>
+document.getElementById("post-form").addEventListener("submit", () => {
+  document.getElementById("post-btn").disabled = true;
+  document.getElementById("post-wait").style.display = "";
+});
+</script>
+{% endblock %}

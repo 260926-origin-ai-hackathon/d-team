@@ -1,0 +1,112 @@
+{% extends "staff/_base.html" %}
+{% block title %}設定{% endblock %}
+{% block body %}
+<h1>設定</h1>
+{% if msg %}<div class="banner">{{ msg }}</div>{% endif %}
+<div class="cols">
+  <section class="card">
+    <h2>避難所と Wi-Fi</h2>
+    <form method="post" action="/staff/settings">
+      <label>避難所名</label><input name="name" style="width:100%" value="{{ profile.name }}" required>
+      <label>住所</label><input name="address" style="width:100%" value="{{ profile.address }}">
+      <div class="row">
+        <div><label>PC の IP（入口 URL）</label><input name="host_ip" value="{{ profile.host_ip }}" required></div>
+        <div><label>SSID</label><input name="ssid" value="{{ profile.ssid }}"></div>
+        <div><label>Wi-Fi パスワード</label><input name="wifi_password" value="{{ profile.wifi_password or '' }}"></div>
+      </div>
+      <p class="muted small">Windows の「モバイルホットスポット」の既定 IP は 192.168.137.1。違うときは PowerShell で <code>ipconfig</code> を見て直してください。</p>
+      <label>想定地区の町名（カンマ区切り）</label><input name="area_towns" style="width:100%" value="{{ profile.area_towns or '' }}" placeholder="東野田町,Higashinoda">
+      <p class="muted small">ダッシュボードの「想定地区の住民 %」に使います。住所にどれかの町名が含まれれば想定地区の住民と数えます（英語の住所も拾うならローマ字も並べる）。空欄で保存すると既定に戻ります。</p>
+      <p><button>保存</button></p>
+    </form>
+  </section>
+  <section class="card">
+    <h2>入口 QR</h2>
+    <div class="row" style="align-items:start">
+      <div style="text-align:center"><img src="/staff/wifi-qr.png" alt="Wi-Fi QR" style="width:160px"><div class="small">① Wi-Fi に入る</div></div>
+      <div style="text-align:center"><img src="/staff/entry-qr.png" alt="入口 QR" style="width:160px"><div class="small">② ページを開く<br><code>{{ profile.entry_url }}</code></div></div>
+    </div>
+    <p class="muted small">入口ポスターは ① Wi-Fi の QR と ② ページの QR の 2 枚で案内します。
+      接続時の自動表示（キャプティブポータル・試験機能）:
+      {% if captive.active %}<span class="ok">動作中</span>（{{ captive.host_ip }} の 53/80 番 → {{ captive.entry_url }}）。ポスターは 2 枚のままです
+      {% elif captive.enabled %}<span class="bad">停止</span> — {{ captive.error }}
+      {% else %}使わない（<code>.env</code> に <code>SHELTER_CAPTIVE=1</code> で試せます。UDP 53・TCP 80 の受信許可が要ります）{% endif %}</p>
+    <p><a class="btn" href="/staff/poster" target="_blank">入口ポスターを印刷</a>
+       <a class="btn secondary" href="/staff/entry-qr.png" download="entry_qr.png">入口 QR の PNG</a></p>
+  </section>
+  <section class="card" id="reset">
+    <h2>名簿と履歴を白紙に戻す</h2>
+    <p class="small">名簿・対応メモ・チャット記録・送信ログを消して、受付番号を 1 から振り直します（お知らせ・設定・マニュアルは残ります）。訓練・デモの前に使います。<strong>元に戻せません。</strong></p>
+    <form method="post" action="/staff/settings/reset" class="row" onsubmit="return confirm('名簿と履歴をすべて消します。よろしいですか？')">
+      <div><label>確認のため「白紙」と入力</label><input name="confirm" autocomplete="off" required></div>
+      <div style="flex:0 0 auto"><button class="danger">白紙に戻す</button></div>
+    </form>
+  </section>
+  <section class="card" id="stock">
+    <h2>備蓄量（不足の計算に使う）</h2>
+    <form method="post" action="/staff/settings/stock">
+      <table>
+        {% for key, item, unit, fn, basis in rules %}
+        <tr><td>{{ item }}</td><td><input name="{{ key }}" inputmode="numeric" value="{{ stocks[key] }}" style="width:8em"> {{ unit.split('/')[0] }}</td></tr>
+        {% endfor %}
+      </table>
+      <p><button>保存</button> <span class="muted small">空欄は「未入力」</span></p>
+    </form>
+  </section>
+  <section class="card" id="manual">
+    <h2>マニュアル（RAG）</h2>
+    <p><span id="ing-state">{{ manual.chunks }} チャンク取り込み済み。{{ manual.message }}</span></p>
+    <ul class="small muted">{% for d in manual.docs %}<li>{{ d.doc }}（{{ d.n }}）</li>{% endfor %}</ul>
+    <details><summary class="muted small">取り込み対象のファイル（shelter/data/manual/）</summary>
+      <ul class="small">{% for f in files %}<li>{{ f }}</li>{% endfor %}</ul></details>
+    <p><button id="ingest-btn" class="secondary">マニュアルを取り込み直す（数分）</button></p>
+    <p class="muted small">差し替えるときは shelter/data/manual/ に .txt か .md を置いてから押してください（PDF は <code>scripts/fetch_public_data.py</code> と同じ方法でテキスト化）。</p>
+  </section>
+  <section class="card" id="gemini">
+    <h2>クラウド AI（Gemini）</h2>
+    <table>
+      <tr><td>状態</td><td>{% if gemini.available %}<span class="ok">API キー設定済み</span>{% else %}<span class="muted">API キー未設定（スイッチは出ません）</span>{% endif %}</td></tr>
+      <tr><td>モデル</td><td><code>{{ gemini.model }}</code></td></tr>
+      {% if gemini.last_error %}<tr><td>最後のエラー</td><td class="bad small">{{ gemini.last_error }}</td></tr>{% endif %}
+    </table>
+    {% if gemini.available %}
+    <p><button type="button" id="gemini-test" class="secondary">接続テスト</button> <span id="gemini-result" class="small"></span></p>
+    <p class="muted small">避難者チャットと AI 助手の右上のスイッチで、端末ごとに「この PC の AI」と切り替えられます。<!--
+      -->要配慮者の洗い出し（名簿）は常にこの PC で処理し、外には送りません。マニュアル検索の埋め込みも PC（Ollama）のままです。<!--
+      -->失敗しても自動でこの PC の AI には戻りません（エラーを表示します）。</p>
+    {% else %}
+    <p class="muted small">使うときは、アプリのフォルダの <code>.env</code> に次を書いてサーバーを起動し直してください（キーは画面や DB には保存しません）。</p>
+    <pre class="small">GEMINI_API_KEY=（Google AI Studio で発行したキー）
+GEMINI_MODEL=gemini-3.8-flash</pre>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const st = document.getElementById("ing-state");
+async function poll() {
+  const r = await fetch("/staff/api/ingest"); const j = await r.json();
+  st.textContent = j.running ? "取り込み中 " + j.done + " / " + j.total : j.chunks + " チャンク取り込み済み。" + (j.message || "");
+  if (j.running) setTimeout(poll, 1500);
+}
+document.getElementById("ingest-btn").onclick = async (e) => {
+  if (!confirm("マニュアルを埋め込み直します。数分かかります。")) return;
+  e.target.disabled = true;
+  await fetch("/staff/api/ingest", { method: "POST" });
+  poll();
+};
+{% if manual.running %}poll();{% endif %}
+const gt = document.getElementById("gemini-test");
+if (gt) gt.onclick = async () => {
+  const out = document.getElementById("gemini-result");
+  gt.disabled = true; out.className = "small"; out.textContent = "テスト中…";
+  try {
+    const j = await (await fetch("/staff/api/gemini-test", { method: "POST" })).json();
+    if (j.ok) { out.className = "small ok"; out.textContent = "OK（" + j.model + "・往復 " + j.latency_ms + " ms）"; }
+    else { out.className = "small bad"; out.textContent = "失敗: " + ((typeof j.error === "string" ? j.error : j.error && j.error.message) || "不明"); }
+  } catch (e) { out.className = "small bad"; out.textContent = "失敗: サーバーに接続できません"; }
+  gt.disabled = false;
+};
+</script>
+{% endblock %}

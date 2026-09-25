@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# Env / secrets
+.env
+
+# Streamlit
+.streamlit/secrets.toml
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Outputs
+outputs/
+*.log
+
+# 公開データの原本（scripts/fetch_public_data.py で再取得）
+shelter/data/**/*.pdf
+shelter/data/**/*.png
+shelter/data/**/*.jpg
+shelter/data/**/*.xlsx
+shelter/data/shelter.db*
+shelter/outbox/
+
+# 開発用の DB コピー（.claude/launch.json の shelter-dev）
+shelter/data/dev.db*

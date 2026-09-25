@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block body %}
+{% if me %}
+{# 自己登録した人: ホームの最上部に受付番号のバーコードを常時表示（職員に見せる用） #}
+<a class="card mybar" href="/me">
+  <div class="mybar-head"><span class="muted">{{ t('receipt_no') }}</span> <strong>{{ me.id }}</strong> <span class="myname">{{ me.name }}</span></div>
+  <img class="barcode" src="/me/barcode.svg" alt="{{ t('receipt_no') }} {{ barcode_text(me.id) }}">
+  <div class="barno">{{ barcode_text(me.id) }}</div>
+</a>
+{% endif %}
+<p class="muted" style="margin-top:12px">
+  {% if reflected %}{{ t('reflected', t=reflected) }}{% else %}{{ t('no_notices') }}{% endif %}
+</p>
+<div class="bigbtns">
+  <a class="bigbtn" href="/notices">📢 {{ t('notices') }}
+    <small>{% if lang == 'en' %}Food, water, medical, toilets{% else %}配給・給水・医療・トイレ{% endif %}</small></a>
+  <a class="bigbtn primary" href="/chat">💬 {{ t('chat') }}
+    <small>{% if lang == 'en' %}Ask the AI in English or Japanese{% else %}AI が日本語・英語で答えます{% endif %}</small></a>
+  {# 伝えるボタンは常に出す。送れるのは登録済みの端末だけ（未登録なら /tell が /register へ 303） #}
+  <a class="bigbtn tell" href="/tell">📣 {{ t('tell') }} <small>{% if me %}{{ t('tell_sub') }}{% elif lang == 'en' %}Register first, then you can tell the staff{% else %}先に受付（登録）をしてから伝えられます{% endif %}</small></a>
+  <a class="bigbtn" href="/info">🏫 {{ t('info') }}
+    <small>{% if lang == 'en' %}Rules, facilities, where to get help{% else %}ルール・設備・相談先{% endif %}</small></a>
+  {% if me %}
+  <a class="bigbtn" href="/me">🔢 {{ t('me') }}
+    <small>{{ t('me_sub') }}</small></a>
+  {% endif %}
+</div>
+{% if not me %}
+{# 初回は受付画面から始まる（main.page_index）。あとで登録を選んだ人向けの入口 #}
+<a class="card notreg" href="/register">
+  <strong>📝 {{ t('not_registered') }}</strong> — {{ t('register') }} →
+  <div class="muted small">{{ t('not_registered_sub') }}</div>
+</a>
+{% endif %}
+{% if notices %}
+<h2>{{ t('latest') }}</h2>
+{% for n in notices %}{% include "_notice.html" %}{% endfor %}
+<p><a href="/notices">{{ t('all_notices') }} →</a></p>
+{% endif %}
+<div class="banner">{{ t('offline_note') }}</div>
+{% endblock %}

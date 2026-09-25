@@ -1,0 +1,40 @@
+{% extends "staff/_base.html" %}
+{% block title %}名簿{% endblock %}
+{% block body %}
+<h1>名簿 <span class="muted">{{ rows | length }} 件</span></h1>
+<form class="row card noprint" method="get">
+  <div style="flex:3"><label>検索（氏名・ふりがな・住所・受付番号）</label><input name="q" value="{{ q }}" style="width:100%"></div>
+  <div><label>要配慮</label><select name="care"><option value="">すべて</option>
+    {% for k, v in CARE.items() %}<option value="{{ k }}" {{ 'selected' if care == k }}>{{ v }}</option>{% endfor %}</select></div>
+  <div><label>状態</label><select name="status">
+    {% for k, v in [("active", "在所"), ("out", "退所"), ("all", "すべて")] %}<option value="{{ k }}" {{ 'selected' if status == k }}>{{ v }}</option>{% endfor %}</select></div>
+  <div style="flex:0 0 auto"><button>絞り込む</button></div>
+  <div style="flex:0 0 auto"><a class="btn secondary" href="/staff/export/roster.csv">CSV 出力（標準様式順）</a></div>
+</form>
+<div class="table-wrap card">
+<table>
+  <tr><th>番号</th><th>氏名</th><th>性別・年齢</th><th>住所</th><th>人数</th><th>要配慮</th><th>運営に伝えたいこと</th><th>相談</th><th>入所</th><th></th></tr>
+  {% for r in rows %}
+  {% set ch = chats.get(r.id) %}
+  <tr class="{{ '' if r.active else 'out' }}">
+    <td><a href="/staff/roster/{{ r.id }}">{{ r.id }}</a></td>
+    <td><a href="/staff/roster/{{ r.id }}">{{ r.name }}</a><div class="muted small">{{ r.kana or '' }}{% if r.source == 'app' %} <span class="chip small">スマホ</span>{% endif %}</div></td>
+    <td>{{ SEX.get(r.sex, '') }}・{{ r.age if r.age is not none else '—' }}</td>
+    <td>{{ r.addr or '' }}</td>
+    <td>{{ r.hh }}{% if r.pet %} 🐾{{ r.pet }}{% endif %}
+        {% if r.members %}<ul class="mlist">{% for m in r.members %}<li>{{ m.name }}（{{ REL.get(m.rel, '') or '同行' }}{% if m.age is not none %}・{{ m.age }}{% endif %}）</li>{% endfor %}</ul>{% endif %}</td>
+    <td>{% for c in r.care %}<span class="tag care">{{ CARE[c] }}</span>{% endfor %}
+        {% for a in r.alg %}<span class="tag">{{ ALLERGY[a] }}</span>{% endfor %}
+        {% for m in r.members if m.care or m.alg %}<div class="small">{{ m.name }}: {% for c in m.care %}<span class="tag care">{{ CARE[c] }}</span>{% endfor %}{% for a in m.alg %}<span class="tag">{{ ALLERGY[a] }}</span>{% endfor %}</div>{% endfor %}</td>
+    <td>{% for n in r.needs %}<span class="tag need">{{ NEEDS[n] }}</span>{% endfor %}
+        {% if r.note %}<div class="small">{{ r.note }}</div>{% endif %}</td>
+    <td>{% if ch %}<a href="/staff/roster/{{ r.id }}#chats">{{ ch.total }} 件</a>{% if ch.open %}<div class="bad small">未対応 {{ ch.open }}</div>{% endif %}{% else %}<span class="muted">—</span>{% endif %}</td>
+    <td>{{ r.checked_in_at[5:16] | replace('T', ' ') }}{% if not r.active %}<br><span class="muted">退所 {{ r.checked_out_at[5:16] | replace('T', ' ') }}</span>{% endif %}</td>
+    <td>{% if r.active %}<form method="post" action="/staff/roster/{{ r.id }}/checkout" data-msg="{{ r.name }} さんを退所にしますか？" onsubmit="return confirm(this.dataset.msg)"><button class="danger">退所</button></form>{% endif %}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="10" class="muted">該当なし</td></tr>
+  {% endfor %}
+</table>
+</div>
+{% endblock %}

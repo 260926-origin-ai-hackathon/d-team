@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}運営{% endblock %} | {{ profile.name }}</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body class="staff">
+{% block nav %}
+{% if is_staff %}
+<nav class="staffnav">
+  <div class="wrap wide">
+    <span class="brand">{{ profile.name }} 運営</span>
+    {% set nav = [("/staff", "ダッシュボード"), ("/staff/cases", "対応の優先順"), ("/staff/handle", "対応"), ("/staff/checkin", "受付"), ("/staff/roster", "名簿"),
+                  ("/staff/notices", "お知らせ"), ("/staff/ai", "AI助手"), ("/staff/sync", "本部へ送る"),
+                  ("/staff/settings", "設定")] %}
+    {% for href, label in nav %}
+      <a href="{{ href }}" class="{{ 'on' if path == href or (href != '/staff' and path.startswith(href)) }}">{{ label }}</a>
+    {% endfor %}
+    <a class="right" href="/" target="_blank">避難者ページ ↗</a>
+    <a href="/staff/logout">ログアウト</a>
+  </div>
+</nav>
+{% endif %}
+{% endblock %}
+<main class="wrap wide">
+{% block body %}{% endblock %}
+</main>
+<script src="/static/app.js"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>
